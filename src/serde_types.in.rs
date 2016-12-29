@@ -9,4 +9,3 @@ pub struct Table {
     pub entries: Vec<Entry>,
 }
 
-

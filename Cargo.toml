@@ -8,6 +8,6 @@ build = "build.rs"
 serde_codegen = "0.8"
 
 [dependencies]
-rusoto = {version = "0.19", features = ["iot", "sqs", "s3"]}
+error-chain = {version = "0.7"}
 serde = {version = "0.8"}
 serde_json = {version = "0.8"}
