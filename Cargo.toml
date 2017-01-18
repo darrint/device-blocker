@@ -11,3 +11,7 @@ serde_codegen = "0.8"
 error-chain = {version = "0.7"}
 serde = {version = "0.8"}
 serde_json = {version = "0.8"}
+#hyper = {version = "0.9", features = []}
+nickel = {version = "0.9"}
+chrono = {version = "0.2", features = ["serde"]}
+clap = {version = "2.19"}
