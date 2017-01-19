@@ -31,7 +31,9 @@ impl Action {
 pub fn write_script(world: &World, old_chain: &str, new_chain: &str, dest: &mut String) {
     dest.push_str(&format!("
 set -e
+set -x
 if iptables -L {old} >/dev/null 2>&1; then
+    iptables -D FORWARD -j {old} || true
     iptables -F {old}
     iptables -X {old}
 fi
