@@ -1,7 +1,7 @@
 [package]
-name = "router-client"
+name = "device-blocker"
 version = "0.1.0"
-authors = ["de-user"]
+authors = ["darrinth@gmail.com"]
 build = "build.rs"
 
 [build-dependencies]
