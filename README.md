@@ -1,11 +1,17 @@
 Device Blocker
 ==============
 
-Device Blocker blocks individual devices while running on a router.  It
-identifies the devices based on their mac addresses.  It works by updating an
-iptables chain to decide what to do with each device, and unknown devices.
+Limit screen time to children's various mobile devices by blocking internet
+access on the family Wifi router.
 
-It also scans a dhcp leases file to ease adding new devices by mac address.
+This is the server which runs on the WiFi router. It has an API which lists
+devices, opens and closes internet access for devices, and discovers new
+devices on the router.
+
+It runs on OpenWRT.
+
+It has a companion UI project:
+[device-blocker-ui](https://github.com/darrint/device-blocker-ui)
 
 Installation
 ============
@@ -18,6 +24,14 @@ releases designated driver which is `musl` based.
 
 Besides all that, the basic idea is to run this program on the router with appropriate
 config files. A companion js web ui can use the api it exports to manage the devices.
+
+ToDo
+====
+* Activate device internet access for a limited time. (i.e. Homework and chores are done, activate for 2hrs.)
+* Write files atomically.
+* Replace nickel with plain hyper.
+* Figure out how to build this project Xargo and deploy to mips and other router architecture.
+* Security? Require a login similar to OpenWRT's LuCi
 
 License
 =======
