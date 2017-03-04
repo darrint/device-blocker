@@ -1,17 +1,66 @@
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
 use std::fs::File;
 use std::io::{BufReader, BufRead};
+use std::ops::DerefMut;
 use files::{write_json_file, read_json_file};
 use schedule::{World, Device, ScheduleEntry, GuestPath, DeviceOverride};
 use script_handler::ScriptHandler;
 use config::{Config, reconcile_config};
 use chrono::{DateTime, UTC};
+use time::Duration;
 use ::script_handler::HandleScript;
 use ::script::write_script;
 use errors::{Result, ResultExt, ErrorKind};
 
 pub type AppServerWrapped = Arc<Mutex<AppServer>>;
+
+pub fn new_wrapped_scheduler(wrapped_server: AppServerWrapped) -> AppServerScheduler {
+    AppServerScheduler {
+        wrapped_server: wrapped_server,
+        condvar: Condvar::new(),
+    }
+}
+
+pub struct AppServerScheduler {
+    pub wrapped_server: AppServerWrapped,
+    condvar: Condvar,
+}
+
+pub type AppServerSchedulerWrapped = Arc<AppServerScheduler>;
+
+pub trait Scheduler {
+    fn kick_scheduler(self);
+}
+
+impl Scheduler for AppServerSchedulerWrapped {
+    fn kick_scheduler(self) {
+        let scheduler = &self;
+        scheduler.condvar.notify_one();
+    }
+}
+
+pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
+    let ref condvar = wrapped_scheduler.condvar;
+    let mut guard = wrapped_scheduler.wrapped_server.lock().unwrap();
+    loop {
+        let option_max_date: Option<DateTime<UTC>> = {
+            let world = &guard.world;
+            world.get_soonest_event_time()
+        };
+        let now : DateTime<UTC> = UTC::now();
+        let dur = option_max_date.map(|max_date|
+            max_date.signed_duration_since(now)).unwrap_or(Duration::days(30));
+        let std_dur = dur.to_std().unwrap_or(::std::time::Duration::new(0, 0));
+        let (g2, _) = condvar.wait_timeout(guard, std_dur).unwrap();
+        guard = g2;
+        {
+            let ref mut world = guard.deref_mut().world;
+            let now = UTC::now();
+            world.expire_bounded(now);
+        };
+    }
+}
 
 pub trait RequestErrExt<'a> {
     fn require_param(&self, String) -> Result<&'a str>;
@@ -67,9 +116,9 @@ impl AppServer {
     }
 
     pub fn set_device_override(&mut self,
-                          override_param: Option<&str>,
-                          time_bound: Option<DateTime<UTC>>)
-                          -> Result<()> {
+                               override_param: Option<&str>,
+                               time_bound: Option<DateTime<UTC>>)
+                               -> Result<()> {
         let override_str = override_param.require_param("Missing override paramter".to_owned())?;
         let override_arg = if override_str.to_lowercase() == "null" {
             None
@@ -78,11 +127,12 @@ impl AppServer {
         } else {
             Some(DeviceOverride::Closed)
         };
-        self.world.schedule.override_entry = override_arg.map(|i|
+        self.world.schedule.override_entry = override_arg.map(|i| {
             ScheduleEntry {
                 item: i,
                 time_bound: time_bound,
-            });
+            }
+        });
         self.write_world()?;
         self.handle_script()
     }
@@ -90,7 +140,7 @@ impl AppServer {
     pub fn add_device(&mut self, mac_param: Option<&str>, name_param: Option<&str>) -> Result<()> {
         let mac = mac_param.require_param("Missing mac parameter".to_owned())?;
         let name = name_param.require_param("Missing name parameter".to_owned())?;
-        let dev = Device{
+        let dev = Device {
             mac: mac.to_owned(),
             name: name.to_owned(),
         };

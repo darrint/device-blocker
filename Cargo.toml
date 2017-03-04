@@ -2,16 +2,18 @@
 name = "device-blocker"
 version = "0.1.0"
 authors = ["darrinth@gmail.com"]
-build = "build.rs"
 
-[build-dependencies]
-serde_codegen = "0.8"
+#[build-dependencies]
+#serde_codegen = "0.8"
 
 [dependencies]
 error-chain = {version = "0.7"}
-serde = {version = "0.8"}
-serde_json = {version = "0.8"}
+serde = {version = "0.9"}
+serde_derive = {version = "0.9"}
+serde_json = {version = "0.9"}
 #hyper = {version = "0.9", features = []}
 nickel = {version = "0.9"}
-chrono = {version = "0.2", features = ["serde"]}
+chrono = {version = "0.3", features = ["serde"]}
+time = {version = "0.1"}
 clap = {version = "2.19"}
+timer = {version = "0.1"}

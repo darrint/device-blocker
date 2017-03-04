@@ -1,6 +1,9 @@
 #![recursion_limit = "1024"]
 
 #[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
 extern crate error_chain;
 
 #[macro_use]
@@ -9,6 +12,7 @@ extern crate serde_json;
 extern crate serde;
 extern crate chrono;
 extern crate clap;
+extern crate time;
 
 mod script;
 mod types;
@@ -31,12 +35,13 @@ mod errors {
 
 use schedule::World;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use server::run_server;
 use script_handler::ScriptHandler;
 use clap::{Arg, App};
 use files::read_json_file;
 use config::{Config, reconcile_config};
-use app_server::AppServer;
+use app_server::{AppServer, new_wrapped_scheduler, run_expiration};
 
 use errors::{Result, ResultExt};
 
@@ -67,6 +72,7 @@ fn run() -> Result<()> {
     let config_file: &str = matches.value_of("config_file")
         .ok_or("Config file argument required")?;
     let config: Config = read_json_file(&config_file).chain_err(|| "Failed to read config file")?;
+
     let mut internal = AppServer {
         config_file: config_file.to_owned(),
         config: config.clone(),
@@ -84,7 +90,13 @@ fn run() -> Result<()> {
 
     let sync_app_server = Arc::new(Mutex::new(internal));
 
-    run_server(sync_app_server.clone());
+    let app_server_scheduler = Arc::new(new_wrapped_scheduler(sync_app_server.clone()));
+    let mut app_server_scheduler2 = app_server_scheduler.clone();
+    thread::spawn(move || {
+        run_expiration(&mut app_server_scheduler2);
+    });
+
+    run_server(app_server_scheduler.clone());
 
     Ok(())
 }

@@ -4,10 +4,11 @@ use nickel::status::StatusCode;
 use serde_json;
 
 use std::fmt::Write;
+use chrono::{DateTime, UTC};
 
-use app_server::AppServerWrapped;
+use app_server::{AppServerSchedulerWrapped, Scheduler};
 
-use ::errors::{Result, Error, ErrorKind};
+use ::errors::{Result, ResultExt, Error, ErrorKind};
 
 #[derive(Clone, Copy)]
 pub struct LogErrorHandler;
@@ -23,7 +24,7 @@ fn concat_err<T>(res: Result<T>) -> Result<T> {
     res.map_err(|top_err| {
         let mut message = String::new();
         for err in top_err.iter() {
-            writeln!(message, "{}", err.description()).expect("Failed to build error message");
+            writeln!(message, "{:?}", err).expect("Failed to build error message");
         }
         message.into()
     })
@@ -50,13 +51,16 @@ impl<T> ConcatExt<T> for Result<T> {
     }
 }
 
-pub fn run_server(app_server: AppServerWrapped) {
+pub fn run_server(app_server: AppServerSchedulerWrapped) {
     let mut server = Nickel::with_data(app_server);
 
     server.handle_error(LogErrorHandler {});
     server.get("/api",
-               middleware!(|req, res| <AppServerWrapped>
-        let world = &req.server_data().lock().unwrap().world;
+               middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        app_server_scheduler.clone().kick_scheduler();
+        let app_server = &app_server_scheduler.wrapped_server.lock().unwrap();
+        let world = &app_server.world;
         try_with!(
             res,
             serde_json::to_string_pretty(world)
@@ -64,13 +68,23 @@ pub fn run_server(app_server: AppServerWrapped) {
     ));
 
     server.post("/api/device/open",
-                middleware!(|req, res| <AppServerWrapped>
-        let app_server = &mut req.server_data().lock().unwrap();
+                middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
+        app_server_scheduler.clone().kick_scheduler();
         let params = try_with!(res, req.form_body());
         let mac_param = params.get("mac");
+        let optional_time_bound_string = params.get("time_bound");
+        let time_bound = try_with!(
+            res,
+            match optional_time_bound_string {
+                None => Ok(None),
+                Some(tbs) => DateTime::parse_from_rfc3339(tbs)
+                    .map(|t| Some(t.with_timezone(&UTC))),
+            }.chain_err(|| "Failed to parse time bound.").status_err());
         try_with!(
             res,
-            app_server.open_device(mac_param, None).status_err());
+            app_server.open_device(mac_param, time_bound).status_err());
         try_with!(
             res,
             serde_json::to_string_pretty(&app_server.world)
@@ -78,8 +92,10 @@ pub fn run_server(app_server: AppServerWrapped) {
     ));
 
     server.post("/api/device/close",
-                middleware!(|req, res| <AppServerWrapped>
-        let app_server = &mut req.server_data().lock().unwrap();
+                middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        app_server_scheduler.clone().kick_scheduler();
+        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
         let params = try_with!(res, req.form_body());
         let mac_param = params.get("mac");
         try_with!(
@@ -92,8 +108,10 @@ pub fn run_server(app_server: AppServerWrapped) {
     ));
 
     server.post("/api/guest",
-                middleware!(|req, res| <AppServerWrapped>
-        let app_server = &mut req.server_data().lock().unwrap();
+                middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        app_server_scheduler.clone().kick_scheduler();
+        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
         let params = try_with!(res, req.form_body());
         let allow_param = params.get("allow");
         try_with!(
@@ -106,8 +124,10 @@ pub fn run_server(app_server: AppServerWrapped) {
     ));
 
     server.post("/api/override_all",
-                middleware!(|req, res| <AppServerWrapped>
-        let app_server = &mut req.server_data().lock().unwrap();
+                middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        app_server_scheduler.clone().kick_scheduler();
+        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
         let params = try_with!(res, req.form_body());
         let override_param = params.get("override");
         try_with!(
@@ -120,8 +140,10 @@ pub fn run_server(app_server: AppServerWrapped) {
     ));
 
     server.post("/api/add_device",
-                middleware!(|req, res| <AppServerWrapped>
-        let app_server = &mut req.server_data().lock().unwrap();
+                middleware!(|req, res| <AppServerSchedulerWrapped>
+        let app_server_scheduler = &mut req.server_data();
+        app_server_scheduler.clone().kick_scheduler();
+        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
         let params = try_with!(res, req.form_body());
         let mac_param = params.get("mac");
         let name_param = params.get("name");
