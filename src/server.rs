@@ -4,7 +4,7 @@ use nickel::status::StatusCode;
 use serde_json;
 
 use std::fmt::Write;
-use chrono::{DateTime, UTC};
+use chrono::{UTC, Duration};
 
 use app_server::{AppServerSchedulerWrapped, Scheduler};
 
@@ -74,14 +74,14 @@ pub fn run_server(app_server: AppServerSchedulerWrapped) {
         app_server_scheduler.clone().kick_scheduler();
         let params = try_with!(res, req.form_body());
         let mac_param = params.get("mac");
-        let optional_time_bound_string = params.get("time_bound");
+        let optional_time_secs_string = params.get("time_secs");
         let time_bound = try_with!(
             res,
-            match optional_time_bound_string {
+            match optional_time_secs_string {
                 None => Ok(None),
-                Some(tbs) => DateTime::parse_from_rfc3339(tbs)
-                    .map(|t| Some(t.with_timezone(&UTC))),
-            }.chain_err(|| "Failed to parse time bound.").status_err());
+                Some(tss) => tss.parse::<i64>()
+                    .map(|secs| Some(UTC::now() + Duration::seconds(secs))),
+            }.chain_err(|| "Failed to parse time secs.").status_err());
         try_with!(
             res,
             app_server.open_device(mac_param, time_bound).status_err());
