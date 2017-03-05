@@ -55,9 +55,12 @@ pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
         let (g2, _) = condvar.wait_timeout(guard, std_dur).unwrap();
         guard = g2;
         {
-            let ref mut world = guard.deref_mut().world;
-            let now = UTC::now();
-            world.expire_bounded(now);
+            {
+                let ref mut world = guard.deref_mut().world;
+                let now = UTC::now();
+                world.expire_bounded(now);
+            }
+            guard.refresh_world().unwrap_or_else(|err| println!("{:?}", err));
         };
     }
 }
@@ -86,15 +89,13 @@ impl AppServer {
                        -> Result<()> {
         let mac = mac_param.require_param("Missing mac parameter".to_owned())?;
         self.world.open_device(mac, time_bound)?;
-        self.write_world()?;
-        self.handle_script()
+        self.refresh_world()
     }
 
     pub fn close_device(&mut self, mac_param: Option<&str>) -> Result<()> {
         let mac = mac_param.require_param("Missing mac parameter".to_owned())?;
         self.world.close_device(mac)?;
-        self.write_world()?;
-        self.handle_script()
+        self.refresh_world()
     }
 
     pub fn set_guest_path(&mut self,
@@ -111,8 +112,7 @@ impl AppServer {
             item: allow,
             time_bound: time_bound,
         };
-        self.write_world()?;
-        self.handle_script()
+        self.refresh_world()
     }
 
     pub fn set_device_override(&mut self,
@@ -133,8 +133,7 @@ impl AppServer {
                 time_bound: time_bound,
             }
         });
-        self.write_world()?;
-        self.handle_script()
+        self.refresh_world()
     }
 
     pub fn add_device(&mut self, mac_param: Option<&str>, name_param: Option<&str>) -> Result<()> {
@@ -152,7 +151,7 @@ impl AppServer {
             reconcile_config(&self.config, &devs, &mut self.world)
         };
         if reconcile_result.updated_world {
-            self.write_world()?;
+            self.refresh_world()?;
         }
         Ok(())
     }
@@ -164,6 +163,11 @@ impl AppServer {
                      "blocked_devices",
                      &mut script);
         self.handler.handle(&script)
+    }
+
+    pub fn refresh_world(&self) -> Result<()> {
+        self.write_world()?;
+        self.handle_script()
     }
 
     pub fn write_world(&self) -> Result<()> {
