@@ -161,6 +161,7 @@ impl AppServer {
         write_script(&self.world,
                      "old_blocked_devices",
                      "blocked_devices",
+                     &self.config.exit_interfaces,
                      &mut script);
         self.handler.handle(&script)
     }

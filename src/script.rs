@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use schedule::{World, GuestPath, DeviceOverride, ScheduleEntry};
 
 enum Action {
@@ -28,7 +29,7 @@ impl Action {
     }
 }
 
-pub fn write_script(world: &World, old_chain: &str, new_chain: &str, dest: &mut String) {
+pub fn write_script(world: &World, old_chain: &str, new_chain: &str, exit_interfaces: &BTreeSet<String>, dest: &mut String) {
     dest.push_str(&format!("
 set -e
 set -x
@@ -41,10 +42,16 @@ if iptables -L {new} >/dev/null 2>&1; then
     iptables -E {new} {old}
 fi
 iptables -N {new}
-iptables -A {new} -i eth1 -j ACCEPT
 ",
                            new = new_chain,
                            old = old_chain));
+
+    for interface in exit_interfaces {
+        let action = &format!(
+            "iptables -A {new} -i {eth} -j ACCEPT\n",
+            new = new_chain, eth = interface);
+        dest.push_str(action);
+    }
 
     let sch = &world.schedule;
     let device_override = &sch.override_entry;
