@@ -1,2 +1,4 @@
 .cargo/
 target/
+src/bundle.js
+src/index.html

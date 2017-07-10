@@ -1,0 +1,8 @@
+{
+  "exit_interfaces": [
+    "eth0"
+  ],
+  "state_file": "/tmp/device-world.json",
+  "dhcp_lease_file": "/tmp/dhcp.leases",
+  "known_devices": []
+}

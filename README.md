@@ -8,22 +8,52 @@ This is the server which runs on the WiFi router. It has an API which lists
 devices, opens and closes internet access for devices, and discovers new
 devices on the router.
 
-It runs on OpenWRT.
+I run this on Lede 17.01.
 
 It has a companion UI project:
 [device-blocker-ui](https://github.com/darrint/device-blocker-ui)
 
-Installation
-============
+Build/Installation
+==================
 
-Currently I've only ever run this on an `x86__64` device running a nightly build of
-OpenWrt. It is written in Rust so in theory it should work well in a variety of
-environments. For embedded work Rust only provides tier two support to `musl`. All
-stable releases of OpenWRT are `uclibc`. I should be able to do better once OpenWRT
-releases designated driver which is `musl` based.
+Install Lede on a router and also download the correct Lede SDK for your
+router.
 
-Besides all that, the basic idea is to run this program on the router with appropriate
-config files. A companion js web ui can use the api it exports to manage the devices.
+Add the SDK to your path. For example:
+
+`PATH=~/Downloads/lede-sdk-17.01.2-x86-64_gcc-5.4.0_musl-1.1.16.Linux-x86_64/staging_dir/toolchain-x86_64_gcc-5.4.0_musl-1.1.16/bin:$PATH`
+
+Build the companion UI project:
+[device-blocker-ui](https://github.com/darrint/device-blocker-ui)
+
+```
+# ... in the device-blocker-ui directory
+npm install -g yarn
+yarn
+webpack --optimize-minimize --define process.env.NODE_ENV="'production'"
+```
+
+Next copy the resulting bundle.js and index.html files to this project's `src`
+directory.
+
+Use rustup to install a stable compiler for the architecture appropriate for
+your router.
+
+`cargo build --target x86_64-unknown-linux-musl --release`
+
+Edit and copy some files from this project to your router:
+
+* Edit and copy `known_devices.json` to `/etc/`
+* Edit and copy `device_blocker.procd` to `/etc/init.d/device_blocker`
+* Copy `target/x86_64-unknown-linux-musl/release/device-blocker` to `/root/`
+* Make sure both `/root/device-blocker` and `/etc/init.d/device_blocker` are executable.
+
+Use the LuCi interface to enable and start the service:
+
+* Go to System -> Startup.
+* Find device-blocker.
+* Enable the service.
+* Start the service.
 
 ToDo
 ====

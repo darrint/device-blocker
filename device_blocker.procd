@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+USE_PROCD=1
+
+BIN=/root/device-blocker
+CONFIG=/etc/known_devices.json
+
+start_service() {
+    procd_open_instance
+    procd_set_param command $BIN -c $CONFIG
+    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+    procd_close_instance
+}
