@@ -27,9 +27,7 @@ config files. A companion js web ui can use the api it exports to manage the dev
 
 ToDo
 ====
-* Activate device internet access for a limited time. (i.e. Homework and chores are done, activate for 2hrs.)
 * Write files atomically.
-* Replace nickel with plain hyper.
 * Figure out how to build this project with Xargo and deploy to mips and other router architecture.
 * Security? Require a login similar to OpenWRT's LuCi
 
