@@ -11,9 +11,11 @@ error-chain = {version = "0.7"}
 serde = {version = "0.9"}
 serde_derive = {version = "0.9"}
 serde_json = {version = "0.9"}
-#hyper = {version = "0.9", features = []}
-nickel = {version = "0.9"}
+iron = {version = "0.5"}
+router = {version = "0.5"}
+params = {version = "0.6"}
 chrono = {version = "0.3", features = ["serde"]}
 time = {version = "0.1"}
 clap = {version = "2.19"}
 timer = {version = "0.1"}
+checksum = {version = "0.2"}

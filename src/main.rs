@@ -7,12 +7,15 @@ extern crate serde_derive;
 extern crate error_chain;
 
 #[macro_use]
-extern crate nickel;
+extern crate iron;
+extern crate router;
+extern crate params;
 extern crate serde_json;
 extern crate serde;
 extern crate chrono;
 extern crate clap;
 extern crate time;
+extern crate checksum;
 
 mod script;
 mod types;

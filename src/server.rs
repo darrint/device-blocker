@@ -1,161 +1,216 @@
-use nickel::{Nickel, HttpRouter, FormBody, ErrorHandler, NickelError, Request, Action, Continue};
-use nickel::status::StatusCode;
+use iron::{Iron, Handler, Request, Response, IronResult, Plugin};
+use iron::headers::{ETag, EntityTag};
+use iron::modifiers::Header;
+use iron::status;
+use iron::mime::Mime;
+use router::Router;
+use params::{Params, Value};
+use std::ops::DerefMut;
+use checksum::crc64::Crc64;
 
 use serde_json;
 
-use std::fmt::Write;
 use chrono::{UTC, Duration};
 
-use app_server::{AppServerSchedulerWrapped, Scheduler};
+use app_server::{AppServerSchedulerWrapped, AppServer, Scheduler};
 
-use ::errors::{Result, ResultExt, Error, ErrorKind};
+use ::errors::{ResultExt};
 
-#[derive(Clone, Copy)]
-pub struct LogErrorHandler;
-
-impl<D> ErrorHandler<D> for LogErrorHandler {
-    fn handle_error(&self, err: &mut NickelError<D>, _req: &mut Request<D>) -> Action {
-        println!("Error: {}", &err.message);
-        Continue(())
-    }
-}
-
-fn concat_err<T>(res: Result<T>) -> Result<T> {
-    res.map_err(|top_err| {
-        let mut message = String::new();
-        for err in top_err.iter() {
-            writeln!(message, "{:?}", err).expect("Failed to build error message");
+macro_rules! define_handler {
+    ($t:ident, $f:ident) => {
+        struct $t {
+            app_server_scheduler_wrapped: AppServerSchedulerWrapped,
         }
-        message.into()
-    })
-}
 
-trait ConcatExt<T> {
-    fn concat(self) -> Result<T>;
-    fn status_err(self) -> ::std::result::Result<T, (StatusCode, Error)>;
-}
+        impl $t {
+            fn new(app_server_scheduler_wrapped: AppServerSchedulerWrapped)
+                    -> $t {
+                $t {
+                    app_server_scheduler_wrapped: app_server_scheduler_wrapped,
+                }
+            }
+        }
 
-fn set_status_for_error(err: Error) -> (StatusCode, Error) {
-    match err {
-        Error(ErrorKind::RequestError(_), _) => (StatusCode::BadRequest, err),
-        _ => (StatusCode::InternalServerError, err),
+        impl Handler for $t {
+            fn handle(&self, req: &mut Request) -> IronResult<Response> {
+                let mut guard = self.app_server_scheduler_wrapped
+                    .wrapped_server.lock().unwrap();
+                let app_server = guard.deref_mut();
+                let scheduler = self.app_server_scheduler_wrapped.clone();
+                $f(scheduler, app_server, req)
+            }
+        }
     }
 }
 
-impl<T> ConcatExt<T> for Result<T> {
-    fn concat(self) -> Result<T> {
-        concat_err(self)
-    }
-    fn status_err(self) -> ::std::result::Result<T, (StatusCode, Error)> {
-        self.concat().map_err(|e| set_status_for_error(e))
+const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
+const BUNDLE_JS: &'static [u8] = include_bytes!("bundle.js");
+
+define_handler!(GetWorldHandler, get_world);
+fn get_world(
+        scheduler: AppServerSchedulerWrapped, app_server: &AppServer,
+        _req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let world = &app_server.world;
+    let serialized = itry!(serde_json::to_string_pretty(world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+define_handler!(OpenDeviceHandler, open_device);
+fn open_device(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let params = itry!(req.get_ref::<Params>());
+
+    let mac_value = params.find(&["mac"]);
+    let mac_param = match mac_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    let optional_time_secs_string = params.find(&["time_secs"]);
+    let time_bound = itry!(
+        match optional_time_secs_string {
+            Some(&Value::String(ref tss)) => tss.parse::<i64>()
+                .map(|secs| Some(UTC::now() + Duration::seconds(secs))),
+            _ => Ok(None),
+        }.chain_err(|| "Failed to parse time secs."), status::BadRequest);
+    itry!(app_server.open_device(mac_param, time_bound));
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+define_handler!(CloseDeviceHandler, close_device);
+fn close_device(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let params = itry!(req.get_ref::<Params>());
+    let mac_value = params.find(&["mac"]);
+    let mac_param = match mac_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    itry!(app_server.close_device(mac_param));
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+define_handler!(SetGuestHandler, set_guest);
+fn set_guest(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let params = itry!(req.get_ref::<Params>());
+    let allow_value = params.find(&["allow"]);
+    let allow_param = match allow_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    itry!(app_server.set_guest_path(allow_param, None));
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+define_handler!(SetOverrideAllHandler, set_override_all);
+fn set_override_all(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let params = itry!(req.get_ref::<Params>());
+    let override_value = params.find(&["override"]);
+    let override_param = match override_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    itry!(app_server.set_device_override(override_param, None));
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+define_handler!(AddDeviceHandler, add_device);
+fn add_device(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    let params = itry!(req.get_ref::<Params>());
+    let name_value = params.find(&["name"]);
+    let name_param = match name_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    let mac_value = params.find(&["mac"]);
+    let mac_param = match mac_value {
+        Some(&Value::String(ref m)) => Some(m.as_ref()),
+        _ => None,
+    };
+    itry!(app_server.add_device(mac_param, name_param));
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+struct StaticHandler {
+    buf: &'static [u8],
+    etag: Header<ETag>,
+    mime: Mime,
+}
+
+impl StaticHandler {
+    fn new(buf: &'static [u8], etag: &str, mime: Mime) -> StaticHandler {
+        let etag_header = Header(ETag(EntityTag::new(false, etag.to_owned())));
+
+        StaticHandler {
+            buf: buf,
+            etag: etag_header,
+            mime: mime,
+        }
     }
 }
 
-pub fn run_server(app_server: AppServerSchedulerWrapped) {
-    let mut server = Nickel::with_data(app_server);
+impl Handler for StaticHandler {
+    fn handle(&self, _req: &mut Request) -> IronResult<Response> {
+        Ok(Response::with((
+            self.mime.clone(), self.etag.clone(), status::Ok, self.buf)))
+    }
+}
 
-    server.handle_error(LogErrorHandler {});
-    server.get("/api",
-               middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        app_server_scheduler.clone().kick_scheduler();
-        let app_server = &app_server_scheduler.wrapped_server.lock().unwrap();
-        let world = &app_server.world;
-        try_with!(
-            res,
-            serde_json::to_string_pretty(world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
+pub fn run_server(app_server_wrapped: AppServerSchedulerWrapped) {
+    let mut router = Router::new();
 
-    server.post("/api/device/open",
-                middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
-        app_server_scheduler.clone().kick_scheduler();
-        let params = try_with!(res, req.form_body());
-        let mac_param = params.get("mac");
-        let optional_time_secs_string = params.get("time_secs");
-        let time_bound = try_with!(
-            res,
-            match optional_time_secs_string {
-                None => Ok(None),
-                Some(tss) => tss.parse::<i64>()
-                    .map(|secs| Some(UTC::now() + Duration::seconds(secs))),
-            }.chain_err(|| "Failed to parse time secs.").status_err());
-        try_with!(
-            res,
-            app_server.open_device(mac_param, time_bound).status_err());
-        try_with!(
-            res,
-            serde_json::to_string_pretty(&app_server.world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
+    router.get(
+        "/api",
+        GetWorldHandler::new(app_server_wrapped.clone()),
+        "get_world");
+    router.post(
+        "/api/device/open",
+        OpenDeviceHandler::new(app_server_wrapped.clone()),
+        "open_device");
+    router.post(
+        "/api/device/close",
+        CloseDeviceHandler::new(app_server_wrapped.clone()),
+        "close_device");
+    router.post("/api/guest",
+        SetGuestHandler::new(app_server_wrapped.clone()),
+        "set_guest");
+    router.post("/api/override_all",
+        SetOverrideAllHandler::new(app_server_wrapped.clone()),
+        "set_override_all");
+    router.post("/api/add_device",
+        AddDeviceHandler::new(app_server_wrapped.clone()),
+        "add_device");
 
-    server.post("/api/device/close",
-                middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        app_server_scheduler.clone().kick_scheduler();
-        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
-        let params = try_with!(res, req.form_body());
-        let mac_param = params.get("mac");
-        try_with!(
-            res,
-            app_server.close_device(mac_param).status_err());
-        try_with!(
-            res,
-            serde_json::to_string_pretty(&app_server.world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
+    let mut crc = Crc64::new();
+    crc.update(INDEX_HTML);
+    crc.update(BUNDLE_JS);
+    let sum = format!("{:x}", crc.getsum());
+    let mime_html: Mime = "text/html".parse().unwrap();
+    let mime_js: Mime = "application/javascript".parse().unwrap();
 
-    server.post("/api/guest",
-                middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        app_server_scheduler.clone().kick_scheduler();
-        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
-        let params = try_with!(res, req.form_body());
-        let allow_param = params.get("allow");
-        try_with!(
-            res,
-            app_server.set_guest_path(allow_param, None).status_err());
-        try_with!(
-            res,
-            serde_json::to_string_pretty(&app_server.world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
-
-    server.post("/api/override_all",
-                middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        app_server_scheduler.clone().kick_scheduler();
-        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
-        let params = try_with!(res, req.form_body());
-        let override_param = params.get("override");
-        try_with!(
-            res,
-            app_server.set_device_override(override_param, None).status_err());
-        try_with!(
-            res,
-            serde_json::to_string_pretty(&app_server.world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
-
-    server.post("/api/add_device",
-                middleware!(|req, res| <AppServerSchedulerWrapped>
-        let app_server_scheduler = &mut req.server_data();
-        app_server_scheduler.clone().kick_scheduler();
-        let app_server = &mut app_server_scheduler.wrapped_server.lock().unwrap();
-        let params = try_with!(res, req.form_body());
-        let mac_param = params.get("mac");
-        let name_param = params.get("name");
-        try_with!(
-            res,
-            app_server.add_device(mac_param, name_param).status_err());
-        try_with!(
-            res,
-            serde_json::to_string_pretty(&app_server.world)
-                .or(Err("Failed to serialize".to_owned())))
-    ));
+    router.get("/", StaticHandler::new(INDEX_HTML, &sum, mime_html), "index");
+    router.get(
+        "/bundle.js", StaticHandler::new(BUNDLE_JS, &sum, mime_js),
+        "bundle_js");
 
     let bind = "0.0.0.0:8000";
-    server.listen(bind).unwrap();
+    Iron::new(router).http(bind).unwrap();
 }
