@@ -149,6 +149,17 @@ fn add_device(
     Ok(Response::with((status::Ok, serialized)))
 }
 
+define_handler!(RefreshDevicesHandler, refresh_devices);
+fn refresh_devices(
+        scheduler: AppServerSchedulerWrapped, app_server: &mut AppServer,
+        _req: &mut Request) -> IronResult<Response> {
+    scheduler.kick_scheduler();
+    itry!(app_server.refresh_devices());
+    let serialized = itry!(serde_json::to_string_pretty(&app_server.world));
+    Ok(Response::with((status::Ok, serialized)))
+}
+
+
 struct StaticHandler {
     buf: &'static [u8],
     etag: Header<ETag>,
@@ -198,6 +209,9 @@ pub fn run_server(app_server_wrapped: AppServerSchedulerWrapped) {
     router.post("/api/add_device",
         AddDeviceHandler::new(app_server_wrapped.clone()),
         "add_device");
+    router.post("/api/refresh_devices",
+        RefreshDevicesHandler::new(app_server_wrapped.clone()),
+        "refresh_devices");
 
     let mut crc = Crc64::new();
     crc.update(INDEX_HTML);

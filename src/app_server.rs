@@ -156,6 +156,18 @@ impl AppServer {
         Ok(())
     }
 
+    pub fn refresh_devices(&mut self) -> Result<()> {
+        let mut devs = BTreeSet::new();
+        read_dhcp_devices(&self.config.dhcp_lease_file, &mut devs)?;
+        let reconcile_result = {
+            reconcile_config(&self.config, &devs, &mut self.world)
+        };
+        if reconcile_result.updated_world {
+            self.refresh_world()?;
+        }
+        Ok(())
+    }
+
     fn handle_script(&self) -> Result<()> {
         let mut script = String::new();
         write_script(&self.world,
