@@ -42,6 +42,16 @@ if iptables -L {new} >/dev/null 2>&1; then
     iptables -E {new} {old}
 fi
 iptables -N {new}
+
+if ip6tables -L {old} >/dev/null 2>&1; then
+    ip6tables -D FORWARD -j {old} || true
+    ip6tables -F {old}
+    ip6tables -X {old}
+fi
+if ip6tables -L {new} >/dev/null 2>&1; then
+    ip6tables -E {new} {old}
+fi
+ip6tables -N {new}
 ",
                            new = new_chain,
                            old = old_chain));
@@ -49,6 +59,10 @@ iptables -N {new}
     for interface in exit_interfaces {
         let action = &format!(
             "iptables -A {new} -i {eth} -j ACCEPT\n",
+            new = new_chain, eth = interface);
+        dest.push_str(action);
+        let action = &format!(
+            "ip6tables -A {new} -i {eth} -j ACCEPT\n",
             new = new_chain, eth = interface);
         dest.push_str(action);
     }
@@ -61,6 +75,10 @@ iptables -N {new}
                                new_chain,
                                entry.item.mac,
                                action));
+        dest.push_str(&format!("ip6tables -A {} -m mac --mac-source {} -j {}\n",
+                               new_chain,
+                               entry.item.mac,
+                               action));
     }
 
     for dev in &world.closed_devices {
@@ -69,10 +87,15 @@ iptables -N {new}
                                new_chain,
                                dev.mac,
                                action));
+        dest.push_str(&format!("ip6tables -A {} -m mac --mac-source {} -j {}\n",
+                               new_chain,
+                               dev.mac,
+                               action));
     }
 
     if world.schedule.guest_entry.item == GuestPath::Closed {
         dest.push_str(&format!("iptables -A {} -j DROP\n", new_chain));
+        dest.push_str(&format!("ip6tables -A {} -j DROP\n", new_chain));
     }
 
     dest.push_str(&format!("
@@ -81,6 +104,13 @@ if iptables -L {old} >/dev/null 2>&1; then
     iptables -D FORWARD -j {old}
     iptables -F {old}
     iptables -X {old}
+fi
+
+ip6tables -I FORWARD 1 -j {new}
+if ip6tables -L {old} >/dev/null 2>&1; then
+    ip6tables -D FORWARD -j {old}
+    ip6tables -F {old}
+    ip6tables -X {old}
 fi
 ",
                            new = new_chain,
