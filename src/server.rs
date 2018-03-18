@@ -45,8 +45,8 @@ macro_rules! define_handler {
     }
 }
 
-const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
-const BUNDLE_JS: &'static [u8] = include_bytes!("bundle.js");
+const INDEX_HTML: &[u8] = include_bytes!("index.html");
+const BUNDLE_JS: &[u8] = include_bytes!("bundle.js");
 
 define_handler!(GetWorldHandler, get_world);
 fn get_world(
@@ -173,9 +173,9 @@ impl StaticHandler {
         let etag_header = Header(ETag(EntityTag::new(false, etag.to_owned())));
 
         StaticHandler {
-            buf: buf,
+            buf,
             etag: etag_header,
-            mime: mime,
+            mime,
         }
     }
 }
@@ -187,7 +187,7 @@ impl Handler for StaticHandler {
     }
 }
 
-pub fn run_server(app_server_wrapped: AppServerSchedulerWrapped) {
+pub fn run_server(app_server_wrapped: &AppServerSchedulerWrapped) {
     let mut router = Router::new();
 
     router.get(

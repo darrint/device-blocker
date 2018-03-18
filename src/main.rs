@@ -83,7 +83,7 @@ fn run() -> Result<()> {
 
     let config_file: &str = matches.value_of("config_file")
         .ok_or("Config file argument required")?;
-    let config: Config = read_json_file(&config_file).chain_err(|| "Failed to read config file")?;
+    let config: Config = read_json_file(config_file).chain_err(|| "Failed to read config file")?;
 
     let mut internal = AppServer {
         config_file: config_file.to_owned(),
@@ -108,7 +108,7 @@ fn run() -> Result<()> {
         run_expiration(&mut app_server_scheduler2);
     });
 
-    run_server(app_server_scheduler.clone());
+    run_server(&app_server_scheduler);
 
     Ok(())
 }

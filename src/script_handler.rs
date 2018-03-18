@@ -25,7 +25,7 @@ impl HandleScript for ScriptHandler {
     }
 }
 
-fn fail_script(script: &str, output: Option<Output>) -> String {
+fn fail_script(script: &str, output: &Option<Output>) -> String {
     format!("Failed to run script, {}:\noutput:\n{:#?}", script, output)
 }
 
@@ -34,12 +34,12 @@ fn run_script(script: &str) -> Result<()> {
         .arg("-c")
         .arg(script)
         .output()
-        .chain_err(|| fail_script(script, None))
+        .chain_err(|| fail_script(script, &None))
         .and_then(|output| {
             if output.status.success() {
                 Ok(())
             } else {
-                Err(fail_script(script, Some(output)).into())
+                Err(fail_script(script, &Some(output)).into())
             }
         })
 }

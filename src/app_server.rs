@@ -17,7 +17,7 @@ pub type AppServerWrapped = Arc<Mutex<AppServer>>;
 
 pub fn new_wrapped_scheduler(wrapped_server: AppServerWrapped) -> AppServerScheduler {
     AppServerScheduler {
-        wrapped_server: wrapped_server,
+        wrapped_server,
         condvar: Condvar::new(),
     }
 }
@@ -41,7 +41,7 @@ impl Scheduler for AppServerSchedulerWrapped {
 }
 
 pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
-    let ref condvar = wrapped_scheduler.condvar;
+    let condvar = &wrapped_scheduler.condvar;
     let mut guard = wrapped_scheduler.wrapped_server.lock().unwrap();
     loop {
         let option_max_date: Option<DateTime<Utc>> = {
@@ -50,13 +50,13 @@ pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
         };
         let now : DateTime<Utc> = Utc::now();
         let dur = option_max_date.map(|max_date|
-            max_date.signed_duration_since(now)).unwrap_or(Duration::days(30));
-        let std_dur = dur.to_std().unwrap_or(::std::time::Duration::new(0, 0));
+            max_date.signed_duration_since(now)).unwrap_or_else(|| Duration::days(30));
+        let std_dur = dur.to_std().unwrap_or_else(|_| ::std::time::Duration::new(0, 0));
         let (g2, _) = condvar.wait_timeout(guard, std_dur).unwrap();
         guard = g2;
         {
             {
-                let ref mut world = guard.deref_mut().world;
+                let world = &mut guard.deref_mut().world;
                 let now = Utc::now();
                 world.expire_bounded(now);
             }
@@ -110,7 +110,7 @@ impl AppServer {
         };
         self.world.schedule.guest_entry = ScheduleEntry {
             item: allow,
-            time_bound: time_bound,
+            time_bound,
         };
         self.refresh_world()
     }
@@ -130,7 +130,7 @@ impl AppServer {
         self.world.schedule.override_entry = override_arg.map(|i| {
             ScheduleEntry {
                 item: i,
-                time_bound: time_bound,
+                time_bound,
             }
         });
         self.refresh_world()
@@ -194,14 +194,14 @@ impl AppServer {
     }
 
     pub fn read_or_create_world(&mut self) -> Result<()> {
-        self.world = read_json_file(&self.config.state_file).unwrap_or(World::default());
+        self.world = read_json_file(&self.config.state_file).unwrap_or_default();
         self.write_world()
     }
 }
 
 pub fn read_dhcp_devices(dhcp_leases_file: &str, devs: &mut BTreeSet<Device>) -> Result<()> {
     let reader =
-        File::open(dhcp_leases_file).chain_err(|| format!("Failed to open dhcp lease file."))?;
+        File::open(dhcp_leases_file).chain_err(|| "Failed to open dhcp lease file.")?;
     let buf_reader = BufReader::new(reader);
     for line_result in buf_reader.lines() {
         let line = line_result.chain_err(|| "Failed to read line")?;
@@ -209,8 +209,8 @@ pub fn read_dhcp_devices(dhcp_leases_file: &str, devs: &mut BTreeSet<Device>) ->
             .into_iter()
             .map(|s| s.to_string())
             .collect();
-        let mac = parts.iter().nth(1).unwrap();
-        let name = parts.iter().nth(3).unwrap();
+        let mac = &parts[1];
+        let name = &parts[3];
         let dev = Device {
             mac: mac.clone(),
             name: name.clone(),

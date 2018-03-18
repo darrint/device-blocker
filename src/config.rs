@@ -12,12 +12,12 @@ pub fn reconcile_config(config: &Config,
                         world: &mut World)
                         -> ReconcileResult {
     let mut config_set: BTreeSet<Device> = BTreeSet::new();
-    for device in config.known_devices.iter() {
+    for device in &config.known_devices {
         config_set.insert(device.clone());
     }
 
     let mut world_set: BTreeSet<Device> = BTreeSet::new();
-    for device in world.closed_devices.iter() {
+    for device in &world.closed_devices {
         world_set.insert(device.clone());
     }
     for device in world.schedule.open_device_entries.iter().map(|e| &e.item) {
@@ -30,7 +30,7 @@ pub fn reconcile_config(config: &Config,
     world.closed_devices = world.closed_devices
         .clone()
         .into_iter()
-        .filter(|d| config_set.contains(&d))
+        .filter(|d| config_set.contains(d))
         .collect();
 
     world.schedule.open_device_entries = world.schedule

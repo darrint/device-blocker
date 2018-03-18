@@ -26,12 +26,12 @@ impl World {
         let result = self.closed_devices
             .iter()
             .find(|d| d.mac == mac)
-            .map(|i| i.clone());
+            .cloned();
         if let Some(dev) = result {
             self.closed_devices.remove(&dev);
             let entry = ScheduleEntry {
                 item: dev.clone(),
-                time_bound: time_bound,
+                time_bound,
             };
             self.schedule.open_device_entries.insert(entry);
             return Ok(());
@@ -45,7 +45,7 @@ impl World {
             .open_device_entries
             .iter()
             .find(|d| d.item.mac == mac)
-            .map(|i| i.clone());
+            .cloned();
         if let Some(entry) = result {
             self.schedule.open_device_entries.remove(&entry);
             let dev = entry.item;
@@ -61,7 +61,7 @@ impl World {
             .open_device_entries
             .iter()
             .filter(|d| d.time_bound.map(|t| t <= time_bound).unwrap_or(false))
-            .map(|i| i.clone())
+            .cloned()
             .collect();
         for expired_entry in expired_open {
             self.schedule.open_device_entries.remove(&expired_entry);

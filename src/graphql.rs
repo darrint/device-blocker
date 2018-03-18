@@ -92,7 +92,7 @@ impl <'a> GraphQLHandler<'a>
     /// the schema needs to execute the query.
     pub fn new(app_server_scheduler_wrapped: AppServerSchedulerWrapped, query: QueryRoot, mutation: MutationRoot) -> Self {
         GraphQLHandler {
-            app_server_scheduler_wrapped: app_server_scheduler_wrapped,
+            app_server_scheduler_wrapped,
             root_node: RootNode::new(query, mutation),
         }
     }
@@ -122,7 +122,7 @@ impl <'a> GraphQLHandler<'a>
         )
     }
 
-    fn execute(&self, request: http::GraphQLRequest) -> IronResult<Response> {
+    fn execute(&self, request: &http::GraphQLRequest) -> IronResult<Response> {
         let response = request.execute(&self.root_node, &self.app_server_scheduler_wrapped.clone());
         let content_type = "application/json".parse::<Mime>().unwrap();
         let json = serde_json::to_string_pretty(&response).unwrap();
@@ -143,6 +143,6 @@ impl <'a> Handler for GraphQLHandler<'a> where 'a: 'static {
             _ => return Ok(Response::with(status::MethodNotAllowed)),
         };
 
-        self.execute(graphql_request)
+        self.execute(&graphql_request)
     }
 }
