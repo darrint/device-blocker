@@ -7,7 +7,7 @@ use files::{write_json_file, read_json_file};
 use schedule::{World, Device, ScheduleEntry, GuestPath, DeviceOverride};
 use script_handler::ScriptHandler;
 use config::{Config, reconcile_config};
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, Utc};
 use time::Duration;
 use ::script_handler::HandleScript;
 use ::script::write_script;
@@ -44,11 +44,11 @@ pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
     let ref condvar = wrapped_scheduler.condvar;
     let mut guard = wrapped_scheduler.wrapped_server.lock().unwrap();
     loop {
-        let option_max_date: Option<DateTime<UTC>> = {
+        let option_max_date: Option<DateTime<Utc>> = {
             let world = &guard.world;
             world.get_soonest_event_time()
         };
-        let now : DateTime<UTC> = UTC::now();
+        let now : DateTime<Utc> = Utc::now();
         let dur = option_max_date.map(|max_date|
             max_date.signed_duration_since(now)).unwrap_or(Duration::days(30));
         let std_dur = dur.to_std().unwrap_or(::std::time::Duration::new(0, 0));
@@ -57,7 +57,7 @@ pub fn run_expiration(wrapped_scheduler: &mut AppServerSchedulerWrapped) {
         {
             {
                 let ref mut world = guard.deref_mut().world;
-                let now = UTC::now();
+                let now = Utc::now();
                 world.expire_bounded(now);
             }
             guard.refresh_world().unwrap_or_else(|err| println!("{:?}", err));
@@ -85,7 +85,7 @@ pub struct AppServer {
 impl AppServer {
     pub fn open_device(&mut self,
                        mac_param: Option<&str>,
-                       time_bound: Option<DateTime<UTC>>)
+                       time_bound: Option<DateTime<Utc>>)
                        -> Result<()> {
         let mac = mac_param.require_param("Missing mac parameter".to_owned())?;
         self.world.open_device(mac, time_bound)?;
@@ -100,7 +100,7 @@ impl AppServer {
 
     pub fn set_guest_path(&mut self,
                           allow_param: Option<&str>,
-                          time_bound: Option<DateTime<UTC>>)
+                          time_bound: Option<DateTime<Utc>>)
                           -> Result<()> {
         let allow_str = allow_param.require_param("Missing allow parameter".to_owned())?;
         let allow = if allow_str.to_lowercase() == "true" {
@@ -117,7 +117,7 @@ impl AppServer {
 
     pub fn set_device_override(&mut self,
                                override_param: Option<&str>,
-                               time_bound: Option<DateTime<UTC>>)
+                               time_bound: Option<DateTime<Utc>>)
                                -> Result<()> {
         let override_str = override_param.require_param("Missing override paramter".to_owned())?;
         let override_arg = if override_str.to_lowercase() == "null" {

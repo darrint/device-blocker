@@ -17,6 +17,14 @@ extern crate clap;
 extern crate time;
 extern crate checksum;
 
+#[macro_use]
+extern crate juniper;
+
+#[macro_use]
+extern crate juniper_codegen;
+extern crate juniper_iron;
+extern crate urlencoded;
+
 mod script;
 mod types;
 mod server;
@@ -25,6 +33,7 @@ mod script_handler;
 mod files;
 mod config;
 mod app_server;
+mod graphql;
 mod errors {
     error_chain!{
         errors {

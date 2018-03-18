@@ -1,18 +1,20 @@
 use iron::{Iron, Handler, Request, Response, IronResult, Plugin};
 use iron::headers::{ETag, EntityTag};
 use iron::modifiers::Header;
-use iron::status;
 use iron::mime::Mime;
+use iron::status;
 use router::Router;
 use params::{Params, Value};
 use std::ops::DerefMut;
 use checksum::crc64::Crc64;
+use juniper_iron::{GraphiQLHandler};
 
 use serde_json;
 
-use chrono::{UTC, Duration};
+use chrono::{Utc, Duration};
 
 use app_server::{AppServerSchedulerWrapped, AppServer, Scheduler};
+use graphql::{QueryRoot, MutationRoot, GraphQLHandler};
 
 use ::errors::{ResultExt};
 
@@ -72,7 +74,7 @@ fn open_device(
     let time_bound = itry!(
         match optional_time_secs_string {
             Some(&Value::String(ref tss)) => tss.parse::<i64>()
-                .map(|secs| Some(UTC::now() + Duration::seconds(secs))),
+                .map(|secs| Some(Utc::now() + Duration::seconds(secs))),
             _ => Ok(None),
         }.chain_err(|| "Failed to parse time secs."), status::BadRequest);
     itry!(app_server.open_device(mac_param, time_bound));
@@ -224,6 +226,16 @@ pub fn run_server(app_server_wrapped: AppServerSchedulerWrapped) {
     router.get(
         "/bundle.js", StaticHandler::new(BUNDLE_JS, &sum, mime_js),
         "bundle_js");
+
+
+    let cf_wrapped = app_server_wrapped.clone();
+
+    let graphql_endpoint = GraphQLHandler::new(
+        cf_wrapped, QueryRoot{}, MutationRoot{});
+    router.any("/graphql", graphql_endpoint, "graphql");
+
+    let graphiql_endpoint = GraphiQLHandler::new("/graphql");
+    router.get("/graphiql", graphiql_endpoint, "graphiql");
 
     let bind = "0.0.0.0:8000";
     Iron::new(router).http(bind).unwrap();

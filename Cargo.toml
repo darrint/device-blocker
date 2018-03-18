@@ -3,19 +3,19 @@ name = "device-blocker"
 version = "0.1.0"
 authors = ["darrinth@gmail.com"]
 
-#[build-dependencies]
-#serde_codegen = "0.8"
-
 [dependencies]
 error-chain = {version = "0.7"}
-serde = {version = "0.9"}
-serde_derive = {version = "0.9"}
-serde_json = {version = "0.9"}
-iron = {version = "0.5"}
-router = {version = "0.5"}
-params = {version = "0.6"}
-chrono = {version = "0.3", features = ["serde"]}
+serde = {version = "1.0"}
+serde_derive = {version = "1.0"}
+serde_json = {version = "1.0"}
+iron = {version = "0.6"}
+router = {version = "0.6"}
+params = {version = "0.8"}
+chrono = {version = "0.4", features = ["serde"]}
 time = {version = "0.1"}
 clap = {version = "2.19"}
-timer = {version = "0.1"}
 checksum = {version = "0.2"}
+juniper = {version = "0.9"}
+juniper_codegen = {version = "0.9"}
+juniper_iron = {version = "0.1"}
+urlencoded = {version = "0.6"}

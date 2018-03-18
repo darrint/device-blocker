@@ -1,4 +1,4 @@
-use serde::de::Deserialize;
+use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use serde_json;
 use std::fs::File;
@@ -12,7 +12,7 @@ pub fn write_json_file<T: Serialize>(file_name: &str, obj: &T) -> Result<()> {
         .chain_err(|| format!("Failed to write json file {}", file_name))
 }
 
-pub fn read_json_file<T: Deserialize>(file_name: &str) -> Result<T> {
+pub fn read_json_file<T: DeserializeOwned>(file_name: &str) -> Result<T> {
     serde_json::from_reader(
         File::open(file_name)
             .chain_err(|| format!("Failed to open {}", file_name))?)

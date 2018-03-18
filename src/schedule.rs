@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use chrono::{DateTime, UTC};
+use chrono::{DateTime, Utc};
 use errors::{Result, ErrorKind};
 
 pub use ::types::{World, Schedule, ScheduleEntry, Device, DeviceOverride, GuestPath};
@@ -22,7 +22,7 @@ impl Default for World {
 }
 
 impl World {
-    pub fn open_device(&mut self, mac: &str, time_bound: Option<DateTime<UTC>>) -> Result<()> {
+    pub fn open_device(&mut self, mac: &str, time_bound: Option<DateTime<Utc>>) -> Result<()> {
         let result = self.closed_devices
             .iter()
             .find(|d| d.mac == mac)
@@ -56,7 +56,7 @@ impl World {
         }
     }
 
-    pub fn expire_bounded(&mut self, time_bound: DateTime<UTC>) {
+    pub fn expire_bounded(&mut self, time_bound: DateTime<Utc>) {
         let expired_open: BTreeSet<ScheduleEntry<Device>> = self.schedule
             .open_device_entries
             .iter()
@@ -82,8 +82,8 @@ impl World {
         }
     }
 
-    pub fn get_soonest_event_time(&self) -> Option<DateTime<UTC>> {
-        let mut all_dates : Vec<DateTime<UTC>> = vec!();
+    pub fn get_soonest_event_time(&self) -> Option<DateTime<Utc>> {
+        let mut all_dates : Vec<DateTime<Utc>> = vec!();
         all_dates.extend(self.schedule.guest_entry.time_bound);
         if let Some(ref se) = self.schedule.override_entry {
             all_dates.extend(se.time_bound);
@@ -98,7 +98,7 @@ impl World {
 pub mod test {
     use std::collections::BTreeSet;
     use schedule::{Schedule, World, ScheduleEntry, GuestPath, Device, DeviceOverride};
-    use chrono::{UTC, TimeZone};
+    use chrono::{Utc, TimeZone};
 
     pub fn world_fixture() -> World {
         return World {
@@ -246,18 +246,18 @@ pub mod test {
             schedule: Schedule {
                 guest_entry: ScheduleEntry {
                     item: GuestPath::Open,
-                    time_bound: Some(UTC.ymd(2017, 2, 1).and_hms(11, 0, 0)),
+                    time_bound: Some(Utc.ymd(2017, 2, 1).and_hms(11, 0, 0)),
                 },
                 override_entry: Some(ScheduleEntry {
                     item: DeviceOverride::Open,
-                    time_bound: Some(UTC.ymd(2017, 2, 1).and_hms(11, 0, 0)),
+                    time_bound: Some(Utc.ymd(2017, 2, 1).and_hms(11, 0, 0)),
                 }),
                 open_device_entries: [ScheduleEntry {
                                           item: Device {
                                               name: "TV2".to_owned(),
                                               mac: "1234".to_owned(),
                                           },
-                                          time_bound: Some(UTC.ymd(2017, 2, 1)
+                                          time_bound: Some(Utc.ymd(2017, 2, 1)
                                               .and_hms(10, 0, 0)),
                                       },
                                       ScheduleEntry {
@@ -265,7 +265,7 @@ pub mod test {
                                               name: "TV1".to_owned(),
                                               mac: "5678".to_owned(),
                                           },
-                                          time_bound: Some(UTC.ymd(2017, 2, 1)
+                                          time_bound: Some(Utc.ymd(2017, 2, 1)
                                               .and_hms(11, 0, 0)),
                                       }]
                     .iter()
@@ -285,23 +285,23 @@ pub mod test {
                 .collect(),
             unknown_devices: BTreeSet::new(),
         };
-        world.expire_bounded(UTC.ymd(2017, 2, 1).and_hms(10, 30, 0));
+        world.expire_bounded(Utc.ymd(2017, 2, 1).and_hms(10, 30, 0));
         let expected_1 = World {
             schedule: Schedule {
                 guest_entry: ScheduleEntry {
                     item: GuestPath::Open,
-                    time_bound: Some(UTC.ymd(2017, 2, 1).and_hms(11, 0, 0)),
+                    time_bound: Some(Utc.ymd(2017, 2, 1).and_hms(11, 0, 0)),
                 },
                 override_entry: Some(ScheduleEntry {
                     item: DeviceOverride::Open,
-                    time_bound: Some(UTC.ymd(2017, 2, 1).and_hms(11, 0, 0)),
+                    time_bound: Some(Utc.ymd(2017, 2, 1).and_hms(11, 0, 0)),
                 }),
                 open_device_entries: [ScheduleEntry {
                                           item: Device {
                                               name: "TV1".to_owned(),
                                               mac: "5678".to_owned(),
                                           },
-                                          time_bound: Some(UTC.ymd(2017, 2, 1)
+                                          time_bound: Some(Utc.ymd(2017, 2, 1)
                                               .and_hms(11, 0, 0)),
                                       }]
                     .iter()
@@ -327,7 +327,7 @@ pub mod test {
         };
         assert_eq!(expected_1, world);
 
-        world.expire_bounded(UTC.ymd(2017, 2, 1).and_hms(11, 30, 0));
+        world.expire_bounded(Utc.ymd(2017, 2, 1).and_hms(11, 30, 0));
         let expected_2 = World {
             schedule: Schedule {
                 guest_entry: ScheduleEntry {
@@ -365,13 +365,13 @@ pub mod test {
     fn test_get_soonest_event_time() {
         let mut world = world_fixture();
         assert_eq!(None, world.get_soonest_event_time());
-        let date_3 = UTC.ymd(2017, 2, 3).and_hms(0, 0, 0);
+        let date_3 = Utc.ymd(2017, 2, 3).and_hms(0, 0, 0);
         world.schedule.guest_entry.time_bound = Some(date_3);
         assert_eq!(Some(date_3), world.get_soonest_event_time());
-        let date_2 = UTC.ymd(2017, 2, 2).and_hms(0, 0, 0);
+        let date_2 = Utc.ymd(2017, 2, 2).and_hms(0, 0, 0);
         world.schedule.override_entry.as_mut().unwrap().time_bound = Some(date_2);
         assert_eq!(Some(date_2), world.get_soonest_event_time());
-        let date_1 = UTC.ymd(2017, 2, 1).and_hms(0, 0, 0);
+        let date_1 = Utc.ymd(2017, 2, 1).and_hms(0, 0, 0);
         let entry = ScheduleEntry {
             item: Device{mac: "".to_owned(), name: "".to_owned()},
             time_bound: Some(date_1),
